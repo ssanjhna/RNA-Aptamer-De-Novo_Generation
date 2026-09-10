@@ -2,12 +2,10 @@
 """
 mmr_reselect.py — post-hoc MMR selection on an existing Apta-MCTS candidate pool.
 
-MMR is a pure post-processing step (it does not touch the search or consume RNG),
-so its effect can be studied WITHOUT re-running MCTS: generate one candidate pool
+MMR is a post-processing step (it does not touch the search or consume RNG),
+so its effect can be studied w/o re-running MCTS: generate one candidate pool
 once (a run with -mmr 1.0), then apply different mmr_lambda values to that same
-pool. This isolates mmr's solo effect perfectly and costs ~nothing.
-
-stdlib only.
+pool. This isolates mmr's solo effect perfectly and costs nothing.
 
 Usage:
     python mmr_reselect.py --pool <dir-or-csv> --topn 100 --mmr-lambda 0.6 \
@@ -44,7 +42,6 @@ def resolve(pool):
 
 
 def mmr_select(cands, topn, lam, k=4):
-    """cands: list of (score, core, full, ss, mfe, kmers), pre-sorted desc by score."""
     if lam >= 1.0:
         return cands[:topn]
     selected, pool = [], list(cands)
