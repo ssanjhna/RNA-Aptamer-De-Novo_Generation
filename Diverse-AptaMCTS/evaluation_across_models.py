@@ -4,16 +4,12 @@ Compare sequence diversity and motif structure across Apta-MCTS runs.
 
 Usage:
     python evaluation_across_models.py \
-        original:path/to/original.csv \
-        default:path/to/diversity_default.csv \
-        T1_r500:path/to/diversity_opt.csv \
+        path to csv files
         --seq-col primary_sequence \
-        --const ACAUGAGGAUC \
+        --const ACAUGAGGAUC \ # if construct of library has a constant region that should not be incorporated in diversity metrics
         --outdir ./diversity_report
 
-Each positional arg is LABEL:CSVPATH. Add as many runs as you like.
-The --const (optional) is stripped before analysis so the fixed MS2 region
-doesn't inflate 'similarity' — diversity is measured on the variable region only.
+Each positional arg is LABEL:CSVPATH.
 
 Outputs in --outdir:
     diversity_summary.csv, per_position_entropy.png, top_motifs.txt,
@@ -32,7 +28,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# validated categorical palette (fixed order — see dataviz skill references/palette.md)
 CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
                "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
 INK_PRIMARY = "#0b0b0b"
@@ -42,8 +37,7 @@ GRIDLINE = "#e1e0d9"
 BASELINE = "#c3c2b7"
 SURFACE = "#fcfcfb"
 
-
-# ---------- helpers ----------
+# helpers
 def kmer_set(seq, k=3):
     return {seq[i:i + k] for i in range(len(seq) - k + 1)} if len(seq) >= k else {seq}
 
@@ -57,7 +51,7 @@ def mean_pairwise_distance(seqs, k=3, max_pairs=20000):
     """Mean pairwise k-mer Jaccard distance = overall spread. Higher = more diverse."""
     seqs = list(seqs)
     pairs = list(combinations(range(len(seqs)), 2))
-    if len(pairs) > max_pairs:                       # subsample for large sets
+    if len(pairs) > max_pairs:                       
         idx = np.random.default_rng(0).choice(len(pairs), max_pairs, replace=False)
         pairs = [pairs[i] for i in idx]
     if not pairs:
@@ -68,7 +62,6 @@ def unique_fraction(seqs):
     return len(set(seqs)) / len(seqs) if seqs else 0.0
 
 def per_position_entropy(seqs):
-    """Shannon entropy (bits) at each position. Low = converged, ~2 = fully diverse."""
     L = min(len(s) for s in seqs)
     seqs = [s[:L] for s in seqs]
     ent = []
@@ -92,7 +85,6 @@ def position_freq_matrix(seqs, alphabet="ACGU"):
     return pd.DataFrame(M, columns=list(alphabet))
 
 def strip_const(seq, const):
-    """Remove the fixed constant so diversity reflects only the variable region."""
     if const and const in seq:
         return seq.replace(const, "", 1)
     return seq
@@ -106,13 +98,11 @@ def _wrap_label(label, width=16):
     return "\n".join(textwrap.wrap(str(label), width=width)) or str(label)
 
 def _new_axes(figsize):
-    """Figure/axes on the report surface — shared chrome starting point for every plot."""
     fig, ax = plt.subplots(figsize=figsize, facecolor=SURFACE)
     ax.set_facecolor(SURFACE)
     return fig, ax
 
 def _finish_axes(ax, title, ylabel=None, xlabel=None, grid_axis="y", legend=False):
-    """Shared chart chrome: recessive gridlines, no top/right spines, ink-toned text."""
     if grid_axis in ("y", "both"):
         ax.yaxis.grid(True, color=GRIDLINE, linewidth=0.8, zorder=0)
     if grid_axis in ("x", "both"):
@@ -133,7 +123,6 @@ def _finish_axes(ax, title, ylabel=None, xlabel=None, grid_axis="y", legend=Fals
         ax.legend(frameon=False, labelcolor=INK_SECONDARY, fontsize=9)
 
 def plot_interaction_scores(score_data, labels, colors, score_col, out_path):
-    """Boxplot + jittered raw points per run, styled to the dataviz categorical palette."""
     n_runs = len(labels)
     positions = np.arange(1, n_runs + 1)
 
@@ -230,8 +219,6 @@ def motif_families(seqs, k=3, min_frac=0.05, max_hamming=1):
     return sorted(families.values(), key=lambda ms: -sum(counts[m] for m in ms)), counts
 
 def run_cdhit(seqs, label, workdir, c=0.9, word=None, threads=4):
-    """Cluster near-duplicate sequences with cd-hit-est. Returns cluster sizes,
-    or None if cd-hit-est isn't on PATH."""
     if shutil.which("cd-hit-est") is None:
         return None
     if word is None:
@@ -264,7 +251,7 @@ def run_cdhit(seqs, label, workdir, c=0.9, word=None, threads=4):
     return sizes
 
 
-# ---------- main ----------
+# main
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("runs", nargs="+", help="LABEL:CSVPATH for each run")
@@ -299,10 +286,8 @@ def main():
         seqs = [strip_const(str(s), args.const) for s in df[args.seq_col].tolist()]
         runs[label] = {"seqs": seqs, "df": df}
 
-    # fixed color per run, shared across every plot in the report
     color_for = {label: CATEGORICAL[i % len(CATEGORICAL)] for i, label in enumerate(runs)}
 
-    # ----- 1. summary diversity table -----
     print(f"\n{'run':<14}{'n':>6}{'unique%':>9}{'mean_pairwise_dist':>20}{'mean_pos_entropy':>18}")
     summary = []
     for label, d in runs.items():
@@ -316,7 +301,6 @@ def main():
         d["entropy"] = ent
     pd.DataFrame(summary).to_csv(os.path.join(args.outdir, "diversity_summary.csv"), index=False)
 
-    # ----- 2. per-position entropy plot (shows WHERE convergence is / breaks up) -----
     fig, ax = _new_axes((11, 4))
     for label, d in runs.items():
         ax.plot(range(1, len(d["entropy"]) + 1), d["entropy"], color=color_for[label],
@@ -329,19 +313,17 @@ def main():
     fig.savefig(os.path.join(args.outdir, "per_position_entropy.png"), dpi=200, facecolor=SURFACE)
     plt.close(fig)
 
-    # ----- 3. top shared motifs (k-mers) per run -----
     with open(os.path.join(args.outdir, "top_motifs.txt"), "w") as fh:
         for label, d in runs.items():
             c = Counter()
             for s in d["seqs"]:
-                c.update(kmer_set(s, args.k))          # presence per sequence
+                c.update(kmer_set(s, args.k))         
             n = len(d["seqs"])
             fh.write(f"\n=== {label} — top {args.top_motifs} {args.k}-mers (fraction of seqs containing) ===\n")
             for kmer, cnt in c.most_common(args.top_motifs):
                 fh.write(f"  {kmer}   {cnt/n:6.1%}\n")
     print(f"\nTop motifs written to {args.outdir}/top_motifs.txt")
 
-    # ----- 4. sequence logos (needs logomaker) -----
     try:
         import logomaker
         fig, axes = plt.subplots(len(runs), 1, figsize=(11, 2.4 * len(runs)), squeeze=False, facecolor=SURFACE)
@@ -364,7 +346,6 @@ def main():
     except ImportError:
         print("logomaker not installed — skipping logos (pip install logomaker)")
 
-    # ----- 5. MDS embedding of k-mer Jaccard distances -----
     try:
         from sklearn.manifold import MDS
         rng = np.random.default_rng(0)
@@ -401,7 +382,6 @@ def main():
     except ImportError:
         print("scikit-learn not installed — skipping MDS embedding (pip install scikit-learn)")
 
-    # ----- 6. CD-HIT clustering: how many near-duplicate sequences? -----
     cdhit_dir = os.path.join(args.outdir, "cdhit")
     os.makedirs(cdhit_dir, exist_ok=True)
     cdhit_rows = []
@@ -448,7 +428,6 @@ def main():
         plt.close(fig)
         print(f"CD-HIT redundancy plot written to {args.outdir}/cdhit_redundancy.png")
 
-    # ----- 7. motif families: cluster similar frequent k-mers -----
     fam_rows = []
     with open(os.path.join(args.outdir, "motif_families.txt"), "w") as fh:
         for label, d in runs.items():
@@ -485,7 +464,6 @@ def main():
     plt.close(fig)
     print(f"Motif families written to {args.outdir}/motif_families.txt and motif_families.png")
 
-    # ----- 8. aptamer-protein interaction score distributions -----
     score_data, score_labels_present, score_rows = [], [], []
     for label, d in runs.items():
         df = d["df"]
