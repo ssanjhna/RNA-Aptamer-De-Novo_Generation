@@ -1,4 +1,4 @@
-## My adapted version include a constant 11 nt ms2 region
+# this version includes option to have constant region included where both variable parts are independently mcts searched
 
 import time
 import math
@@ -49,7 +49,7 @@ class MCTS:
             if iteration_limits == None:
                 raise ValueError("Must have either a time limit or an iteration limit!")
 
-            # number of iteractions of the search
+            # number of iterations of the search
             if iteration_limits < 1:
                 raise ValueError("Iteration limit must be greater than one")
             self.search_limit = iteration_limits
@@ -144,14 +144,7 @@ class MCTS:
             if node is best_child:
                 return action
 
-    def _commit_action(self):
-        """Choose which root action to commit this round.
-
-        commit_temperature == 0 -> original behaviour: argmax mean reward
-        (exploration weight 0). commit_temperature > 0 -> sample among root
-        children with probability proportional to num_visits**(1/T). Higher T
-        => flatter distribution => more diverse committed prefixes across runs.
-        """
+    def _commit_action(self): # choose which root action to commit
         children = list(self.root.children.items())  # (action, node)
         T = self.commit_temperature
         if T is None or T <= 0 or len(children) <= 1:
@@ -314,7 +307,6 @@ class AptamerStates:
         self.aptamer = current_aptamer
         self.actions = letters
  
-        # Two-block-with-constant configuration.
         # If block lengths are not supplied, fall back to a single block of
         # length `bp` and an empty constant (== original behaviour).
         if block1_len is None and block2_len is None:
@@ -325,19 +317,11 @@ class AptamerStates:
             self.block2_len = block2_len if block2_len is not None else 0
  
         self.const_region = const_region
-        # bp is the total number of VARIABLE positions the search fills.
+        # bp is the total number of variable positions the search fills.
         # The constant is NOT searched, so it is excluded from this count.
         self.bp = self.block1_len + self.block2_len
 
-    def get_possible_actions(self):
-        """
-        State is sequene of the Aptamer
-
-        - aptamer has 4 letters (DNA case ACGT, RNA case ACGU)
-        - that means possible actions are only 4 actions
-        - But! in this version, we choose 8 actions which is multiplied left or right directions
-
-        """
+    def get_possible_actions(self): #in this version, we choose 8 actions which is multiplied left or right directions
 
         possible_actions = [Action(len(self.aptamer), nl) for nl in self.actions]
         return possible_actions
@@ -383,7 +367,6 @@ def _kmer_set(seq, k=4):
 
 
 def _similarity(a, b, k=4):
-    """Jaccard similarity on k-mer sets (0 = disjoint, 1 = identical k-mer content)."""
     sa, sb = _kmer_set(a, k), _kmer_set(b, k)
     if not sa or not sb:
         return 1.0 if a == b else 0.0
@@ -392,9 +375,6 @@ def _similarity(a, b, k=4):
 
 def mmr_select(candidates, top_k, lam=1.0, k=4):
     """Maximal Marginal Relevance selection over scored candidates.
-
-    Greedily builds a set that trades off score against novelty relative to
-    what has already been picked:
 
         value = lam * score - (1 - lam) * max_similarity_to_selected
 
@@ -500,11 +480,7 @@ class AptaMCTS:
 
         candidates = []
 
-        # Greedy outer loop: commit one variable letter per inner MCTS run.
-        # This naturally runs b1 rounds for block 1, then b2 rounds for block 2.
-        # The constant is auto-spliced at scoring time (see AptamerStates.get_reward),
-        # so every full-length rollout scores block1 + const + block2.
-        #
+        # Every full-length rollout scores block1 + const + block2.
         # Outer restart loop pools rollout candidates across independent builds;
         # with commit_temperature > 0 each restart commits a different prefix and
         # therefore explores a different motif.
