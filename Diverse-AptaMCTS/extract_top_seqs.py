@@ -1,25 +1,16 @@
 #!/usr/bin/env python
 """
 extract_top_sequences.py
-========================
 
 Extract the top-scoring aptamer sequences from each Apta-MCTS run and write
 (1) a combined ranked CSV and (2) a FASTA per run (for AF3 / downstream).
 
-The run output CSVs are already sorted by aptamer_protein_interaction_score
-(descending), but this re-sorts defensively so it's correct regardless.
-
 If a run was generated with -fwd/-bwd primers, the CSV's primary_sequence is
 the full  fwd + core + bwd  construct. Set --fwd-len / --bwd-len so the script
-also reports the stripped variable core (what actually varies between designs).
-
-Dependencies: standard library only (csv, argparse, glob, os).
+also reports the stripped variable core.
 
 Usage
 -----
-Point RUNS at your run folders (each holds one <fasta-header>.csv), or pass a
-CSV/dir directly. Then:
-
     python extract_top_sequences.py --topn 10 --fwd-len 34 --bwd-len 4 \
         --outdir top_hits
 
@@ -32,10 +23,7 @@ import csv
 import glob
 import argparse
 
-# ----------------------------------------------------------------------------
-# EDIT THIS: label -> path. Each path may be either a directory (the script
-# globs the single *.csv inside it) or a direct .csv file.
-# ----------------------------------------------------------------------------
+#
 RUNS = {
     "original_git":            "results_primers/original_git",
     "diverse_default":         "results_primers/diverse_default",
@@ -50,7 +38,6 @@ MFE_COL   = "minimum_free_energy"
 
 
 def resolve_csv(path, base):
-    """Return a concrete CSV path from a dir (glob *.csv) or a direct file."""
     if not os.path.isabs(path) and not os.path.exists(path):
         path = os.path.join(base, path)
     if os.path.isdir(path):
@@ -64,7 +51,6 @@ def resolve_csv(path, base):
 
 
 def is_unstructured(ss, mfe):
-    """True if the sequence has no predicted base pairs (all-dots SS, MFE ~0)."""
     if ss is not None and "(" in ss:
         return False                      # has at least one base pair -> structured
     # no '(' (all dots or empty) -> unstructured; confirm with MFE if available
